@@ -3,6 +3,7 @@ import numpy as np
 import scipy.io
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
+from nst_utils import generate_noise_image
 # import tensorflow.compat.v1 as tf
 # from nst_utils import load_vgg_model
 
@@ -31,25 +32,36 @@ import matplotlib.image as mpimg
 # plt.show
 
 # draw the figure so the animations will work
-fig = plt.gcf()
-fig.show()
-fig.canvas.draw()
-i = 0
-haha = [0]
-haha2 = [100]
-while True:
-    # compute something
-    haha.append(i)
-    haha2.append(100-i)
-    plt.subplot(1,2,1)
-    plt.plot(haha) # plot something
+# fig = plt.gcf()
+# fig.show()
+# fig.canvas.draw()
+# i = 0
+# haha = [0]
+# haha2 = [100]
+# while True:
+#     # compute something
+#     haha.append(i)
+#     haha2.append(100-i)
+#     plt.subplot(1,2,1)
+#     plt.plot(haha) # plot something
 
-    plt.subplot(1,2,2)
-    plt.plot(haha2)
+#     plt.subplot(1,2,2)
+#     plt.plot(haha2)
     
-    # update canvas immediately
-    #plt.xlim([0, 100])
-    plt.ylim([0, 100])
-    #plt.pause(0.01)  # I ain't needed!!!
-    fig.canvas.draw()
-    i+=1
+#     # update canvas immediately
+#     #plt.xlim([0, 100])
+#     plt.ylim([0, 100])
+#     #plt.pause(0.01)  # I ain't needed!!!
+#     fig.canvas.draw()
+#     i+=1
+
+# config = {
+#     'color_channel' : 3
+# }
+
+# print('mean' in config)
+content_image = imageio.imread('images/louvre_small.jpg')
+h = int(generate_noise_image(content_image))
+print(np.max(h))
+plt.imshow(h[0,:,:,:])
+plt.show()

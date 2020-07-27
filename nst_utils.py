@@ -3,7 +3,7 @@
 import os
 import sys
 import scipy.io
-import scipy.misc
+import imageio
 import matplotlib.pyplot as plt
 from matplotlib.pyplot import imshow
 from PIL import Image
@@ -186,5 +186,5 @@ def save_image(path, image):
     
     # Clip and Save the image
     image = np.clip(image[0], 0, 255).astype('uint8')
-    scipy.misc.imsave(path, image)
+    imageio.imsave(path, image)
 
