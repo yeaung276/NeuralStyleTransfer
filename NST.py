@@ -14,6 +14,7 @@ class NST(ABC):
     learning_rate = 2.0
     content = None
     style = None
+    name = 'generatedImage.jpg'
     
     @classmethod
     def configure(cls,config):
@@ -37,6 +38,7 @@ class NST(ABC):
         cls.learning_rate = config.get('learning_rate',2.0)
         cls.content = config.get('content',[('conv4_2',1)])
         cls.style = config.get('style',[('conv4_2',1)])
+        cls.name = config.get('image_name','generated')
         CONFIG.VGG_MODEL = config.get('model','pretrained-model/imagenet-vgg-verydeep-19.mat')
         CONFIG.COLOR_CHANNELS = config.get('color_channel',3)
         CONFIG.IMAGE_HEIGHT = config.get('img_height',300)
@@ -55,8 +57,8 @@ class NST(ABC):
         global model 
         model = load_vgg_model(CONFIG.VGG_MODEL)
 
-    @classmethod
-    def reshape_image(cls,image):
+    @staticmethod
+    def reshape_image(image):
         return reshape_and_normalize_image(image)
         
     @classmethod
@@ -136,8 +138,49 @@ class NST(ABC):
             J_style += coeff * cls._calculateLayerStyleCost(style,layer)
         return J_style
 
+    @staticmethod
+    def _createFig():
+        fig = plt.gcf()
+        fig.show()
+        fig.canvas.draw()
+        ax1 = fig.add_subplot(1,2,1)
+        ax2 = fig.add_subplot(1,2,2)
+        return fig,ax1,ax2
+
+    @staticmethod
+    def _updateFig(fig,ax1,ax2,arg1,arg2,x_lim):
+        #draw image
+        ax1.imshow(arg1[0,:,:,:])
+        fig.canvas.draw()
+        #draw cost
+        J_show,J_C_show,J_S_show = arg2
+        ax2.plot(J_show,'r')
+        ax2.set_ylabel('total cost')
+        ax2_twin = ax2.twinx()
+        ax2_twin.plot(J_C_show,'g')
+        ax2_twin.plot(J_S_show, 'y')
+        ax2_twin.set_ylabel('content and style cost',color='r')
+        ax2.set_xlim(int(x_lim/10)+1)
+        fig.canvas.draw()
+
     @classmethod
-    def Generate(cls,content,style,alpha=10,beta=40,iter=100):
+    def Generate(cls,content,style,alpha=10,beta=40,no_iter=100,display=False):
+        """
+        call signature : Generate(content,style,alpha=10,beta=40,iter=100)
+        input --  content : content image,
+                  style   : style image,
+                  alpha   : content cost multiplier,
+                  beta    : style cost multiplier,
+                  iter    : number of iteration
+        return --- a dictionary
+                  total_cost : array of total cost at eact 10th iteration,
+                  content_cost : array of content cost at each 10th iteration,
+                  style_cost : array of style cost at each 10th iteration,
+                  image : np array of generated image of shape(1,h,w,c)
+        side effect ---
+                  save the generated image in output dir
+
+        """
 
         J_content = cls.calculateTotalContentCost(content,cls.content)
         J_style = cls.calculateTotalStyleCost(style,cls.style)
@@ -153,9 +196,8 @@ class NST(ABC):
         train_step = optimizer.minimize(J)
 
         #initialize plot
-        fig = plt.gcf()
-        fig.show()
-        fig.canvas.draw()
+        if(display):
+            fig,ax1,ax2 = cls._createFig()
         J_show = []
         J_C_show = []
         J_S_show = []
@@ -167,7 +209,7 @@ class NST(ABC):
             sess.run(model['input'].assign(image))
 
             #run optimization
-            for i in range(iter):
+            for i in range(no_iter):
                 sess.run(train_step)
                 generated_image = sess.run(model['input'])
 
@@ -178,24 +220,42 @@ class NST(ABC):
                     J_C_show.append(temp_2)
                     J_S_show.append(temp_3)
                     print('iter : {}, J : {}'.format(i,temp_1))
-                    #draw image
-                    plt.subplot(1,2,1)
-                    plt.imshow(generated_image[0,:,:,:])
-                    fig.canvas.draw()
-                    #draw cost
-                    plt.subplot(1,2,2)
-                    plt.plot(J_show,'r')
-                    plt.plot(J_C_show,'g')
-                    plt.plot(J_S_show,'b')
-                    plt.xlim(int(iter/10)+1)
-                    fig.canvas.draw()
-                    
-        save_image(CONFIG.OUTPUT_DIR + 'generated.jpg',generated_image)
-        return {
+                    if(display):
+                        cls._updateFig(fig,ax1,ax2,generated_image,(J_show,J_C_show,J_S_show),no_iter)
+
+        mat = {
             'total_cost' : J_show,
             'content_cost' : J_C_show,
             'style_cost' : J_S_show,
             'image' : generated_image 
         }
 
+        save_image(CONFIG.OUTPUT_DIR + cls.name + '.jpg',generated_image)
+        scipy.io.savemat(CONFIG.OUTPUT_DIR + cls.name + '.mat',mat)
+        return mat
+
+import PIL
+from PIL import Image
+
+
+def resize_image_keep_ratio(width,imagePath,savePath):
+    mywidth = width
+
+    img = Image.open(imagePath)
+    wpercent = (mywidth/float(img.size[0]))
+    hsize = int((float(img.size[1])*float(wpercent)))
+    img = img.resize((mywidth,hsize), PIL.Image.ANTIALIAS)
+    print('Image size : {}'.format(img.size))
+    img.save(savePath)
+
+def resize_image_forced(imagePath,savePath,*targetImg,size=None):
+    resize_size = None
+    if(size==None):
+        resize_size = Image.open(targetImg).size
+    else:
+        resize_size = size
+    img = Image.open(imagePath)
+    img = img.resize(resize_size, PIL.Image.ANTIALIAS)
+    print('Image size : {}'.format(img.size))
+    img.save(savePath)
 
