@@ -1,3 +1,5 @@
+##Neural Style Transfer
+
 This is Neural Style Transfer implementation using vgg-net-deep-19 conv-net.<br>
 The hypermeters in here are used from Coursera-course(Convolutional Neural Network).<br>
 You can tune the hypermeter further if u want to in config dictionary in main.py.<br>
