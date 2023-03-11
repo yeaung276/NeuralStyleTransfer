@@ -1,83 +1,111 @@
 import tensorflow.compat.v1 as tf
-import imageio
-import scipy.io
-import numpy as np
 import matplotlib.pyplot as plt
-from abc import ABC
-from nst_utils import load_vgg_model,CONFIG,reshape_and_normalize_image,generate_noise_image,save_image
+from typing import Tuple, List
+from PIL import Image
+from model import load_vgg_model
+from nst_utils import generate_noise_image
 
 tf.disable_eager_execution()
-
-model = None
-
-class NST(ABC):
-    learning_rate = 2.0
-    content = None
-    style = None
-    name = 'generatedImage.jpg'
+class NST:
+    # image configuration
+    height = 300
+    width = 400
+    channel = 3
     
+    # loss function configuration
+    content_layers = [('conv4_2',1)]
+    style_layers = [
+        ('conv1_1',0.2),
+        ('conv2_1',0.2),
+        ('conv3_1',0.2),
+        ('conv4_1',0.2),
+        ('conv5_1',0.2)
+        ]
+    alpha = 10
+    beta = 40
+    
+    # training hypermeter configuration
+    learning_rate = 2.0
+    
+    # model
+    model = None
+    
+    # reportings
+    fig = None
+    ax1 = None
+    ax2 = None
+    
+    # hypermeter tuning methods
     @classmethod
-    def configure(cls,config):
-        """
-        config is dictionary containing these fields, 
-        If the dictionary didn't specify the field, it will be assign
-        default value
-        keys ---
-        alpha : learning rate of the optimization
-        content : array of (layer Name, coefficient) pairs to compute the activation of content image and content cost
-        style : array of (layer Name, coefficient) pairs to computte the activation of style image and style cost
-        model : path of model .mat file
-        color_channel : color channel of content image and style image
-        img_height : image height of content image and style image
-        img_width : image width of content image and style image
-        means : image means
-        noise_ratio : noise ratio which will be used in initial noisy image generation
-        output_dir : directory for the output image to be saved
-        """
+    def set_image_shape(cls, shape: Tuple[int, int, int]) -> None:
+        cls.width, cls.height, cls.channel = shape
+        
+    @classmethod
+    def set_style_layers(cls, layers: List[Tuple[str, float]]) -> None:
+        """set the layer to calculate style cost from VGG19 net
 
-        cls.learning_rate = config.get('learning_rate',2.0)
-        cls.content = config.get('content',[('conv4_2',1)])
-        cls.style = config.get('style',[('conv4_2',1)])
-        cls.name = config.get('image_name','generated')
-        CONFIG.VGG_MODEL = config.get('model','pretrained-model/imagenet-vgg-verydeep-19.mat')
-        CONFIG.COLOR_CHANNELS = config.get('color_channel',3)
-        CONFIG.IMAGE_HEIGHT = config.get('img_height',300)
-        CONFIG.IMAGE_WIDTH = config.get('img_width',400)
-        CONFIG.OUTPUT_DIR = config.get('output_dir','output/')
-        if('means' in config):
-            CONFIG.MEANS = config['means']
-        if('noise_ratio' in config):
-            CONFIG.NOISE_RATIO = config['noise_ratio']
+        Args:
+            layers (List[Tuple[str, int]]): List containing tuple whose first element
+            is layer name and second element is cost multiplier for that layer.
+            All the weight should sum up to 1.
+
+        Returns:
+            None
+        """
+        cls.style_layers = layers
 
     @classmethod
-    def initialize(cls):
+    def set_content_layers(cls, layers: List[Tuple[str, float]]) -> None:
+        """set the layer to calculate content cost from VGG19 net
+
+        Args:
+            layers (List[Tuple[str, int]]): List containing tuple whose first element
+            is layer name and second element is cost multiplier for that layer.
+            All the weight should sum up to 1.
+
+        Returns:
+            None
+        """
+        cls.content_layers = layers
+        
+    @classmethod
+    def set_cost_weights(cls, alpha: float, beta: float) -> None:
+        """set the weight for content lost and style loss in loss calculation
+
+        Args:
+            alpha (float): weight multiplier for content loss
+            beta (float): weight multiplier for style loss
+        """
+        cls.alpha = alpha
+        cls.beta = beta
+        
+    @classmethod
+    def set_leraning_rate(cls, lr: float) -> None:
+        cls.learning_rate = lr
+
+    @classmethod
+    def initialize(cls, weight_path: str) -> None:
         """
         This function initialize the model for computing activations
         """
-        global model 
-        model = load_vgg_model(CONFIG.VGG_MODEL)
-
-    @staticmethod
-    def reshape_image(image):
-        return reshape_and_normalize_image(image)
-        
+        cls.model = load_vgg_model(weight_path, (cls.width, cls.height, cls.channel))
+    
+    # core math methods
     @classmethod
-    def _calculateNetOutput(cls,inputArg,layerName):
+    def calculate_net_output(cls, input, output_layer_name):
         """
-        inputArg : input image to calculate the activation from VGG net,
-        layerName : layer from which the activation are to be extracted
+        input : input image to calculate the activation from VGG net,
+        output_layer_name : layer from which the activation are to be extracted
 
         return : activation output of layerName
         """
-        out = None
         with tf.Session() as sess:
-            sess.run(model['input'].assign(inputArg))
-            out = sess.run(model[layerName])
-            sess.close()
+            sess.run(cls.model['input'].assign(input))
+            out = sess.run(cls.model[output_layer_name])
         return out
 
     @classmethod
-    def _calculateGramMatrix(cls,matrix):
+    def calculate_gram_matrix(cls,matrix):
         """
         Input : Matrix of shape (c,h*w)
         Output : Gram Matrix(Cross corolation) of shape(c,c)
@@ -85,108 +113,105 @@ class NST(ABC):
         return tf.matmul(matrix,tf.transpose(matrix))
 
     @classmethod
-    def _calculateLayerContentCost(cls,content,layerName):
+    def calculate_layer_content_cost(cls,content_image,layer_name):
         """
         This Calculate the Content Cost
         A_C.shape = (m,h,w,c), m=1
         A_G.shape = (m,h,w,c), m=1
         """
-        A_C = cls._calculateNetOutput(content,layerName)
-        A_G = model[layerName]
-        m,h,w,c = A_G.get_shape().as_list()
+        A_C = cls.calculate_net_output(content_image,layer_name)
+        A_G = cls.model[layer_name]
+        _,h,w,c = A_G.get_shape().as_list()
         J_content = 1/(4 * h * w * c) * tf.reduce_sum(tf.square(tf.subtract(A_C,A_G)))
         return J_content
 
     @classmethod
-    def _calculateLayerStyleCost(cls,style,layerName):
+    def calculate_layer_style_cost(cls,style_image,layer_name):
         """
         This Calculate the Style Cost
         A_S.shape = (m,h,w,c) => reshape to (c,h*w), m=1
         A_G.shape = (m,h,w,c) => reshape to (c,h*w), m=1
 
         """
-        A_S = cls._calculateNetOutput(style,layerName)
-        A_G = model[layerName]
-        m,h,w,c = A_G.get_shape().as_list()
+        A_S = cls.calculate_net_output(style_image,layer_name)
+        A_G = cls.model[layer_name]
+        _,h,w,c = A_G.get_shape().as_list()
         A_S = tf.transpose(tf.reshape(A_S,shape=[-1,c]),perm=[1,0])
         A_G = tf.transpose(tf.reshape(A_G,shape=[-1,c]),perm=[1,0])
 
         #calculate Gram Matrix of each activation
-        G_S = cls._calculateGramMatrix(A_S)
-        G_G = cls._calculateGramMatrix(A_G)
+        G_S = cls.calculate_gram_matrix(A_S)
+        G_G = cls.calculate_gram_matrix(A_G)
 
         J_style = (1/(4*h*w*c)**2) * tf.reduce_sum(tf.square(tf.subtract(G_S,G_G)))
         return J_style
 
     @classmethod
-    def calculateTotalContentCost(cls,content,configure):
+    def calculate_total_content_cost(cls,content):
         """
         Calculate the total content Cost across the VGG conv_net
         """
         J_content = 0
-        for layer,coeff in configure:
-            J_content += coeff * cls._calculateLayerContentCost(content,layer)
+        for layer,coeff in cls.content_layers:
+            J_content += coeff * cls.calculate_layer_content_cost(content,layer)
         return J_content
 
     @classmethod
-    def calculateTotalStyleCost(cls,style,configure):
+    def calculate_total_style_cost(cls,style):
         """
         Calculate the total style Cost across the VGG conv_net
         """
         J_style = 0
-        for layer,coeff in configure:
-            J_style += coeff * cls._calculateLayerStyleCost(style,layer)
+        for layer,coeff in cls.style_layers:
+            J_style += coeff * cls.calculate_layer_style_cost(style,layer)
         return J_style
+        
+
+    # reporting graphs and training data methods
+    @staticmethod
+    def create_fig(cls, x_limit: int) -> None:
+        cls.fig = plt.gcf()
+        cls.fig.show()
+        cls.fig.canvas.draw()
+        cls.ax1 = cls.fig.add_subplot(1,2,1)
+        cls.ax2 = cls.fig.add_subplot(1,2,2)
+        cls.ax2.set_xlim(int(x_limit/10)+1)
 
     @staticmethod
-    def _createFig():
-        fig = plt.gcf()
-        fig.show()
-        fig.canvas.draw()
-        ax1 = fig.add_subplot(1,2,1)
-        ax2 = fig.add_subplot(1,2,2)
-        return fig,ax1,ax2
-
-    @staticmethod
-    def _updateFig(fig,ax1,ax2,arg1,arg2,x_lim):
+    def update_fig(cls,generated_image,costs) -> None:
+        if(cls.fig == None):
+            print('Figure is not initialized.')
+            return
         #draw image
-        ax1.imshow(arg1[0,:,:,:])
-        fig.canvas.draw()
+        cls.ax1.imshow(generated_image[0,:,:,:])
         #draw cost
-        J_show,J_C_show,J_S_show = arg2
-        ax2.plot(J_show,'r')
-        ax2.set_ylabel('total cost')
-        ax2_twin = ax2.twinx()
-        ax2_twin.plot(J_C_show,'g')
-        ax2_twin.plot(J_S_show, 'y')
+        cls.ax2.plot(costs.get('J_show',[]),'r')
+        cls.ax2.set_ylabel('total cost')
+        ax2_twin = cls.ax2.twinx()
+        ax2_twin.plot(costs.get('J_C_show',[]),'g')
+        ax2_twin.plot(costs.get('J_S_show',[]), 'y')
         ax2_twin.set_ylabel('content and style cost',color='r')
-        ax2.set_xlim(int(x_lim/10)+1)
-        fig.canvas.draw()
+        cls.fig.canvas.draw()
 
     @classmethod
-    def Generate(cls,content,style,alpha=10,beta=40,no_iter=100,display=False):
+    def generate(cls, content:Image.Image, style:Image.Image, no_iter=100, display=False):
         """
-        call signature : Generate(content,style,alpha=10,beta=40,iter=100)
+        call signature : Generate(content,style,iter=100)
         input --  content : content image,
                   style   : style image,
-                  alpha   : content cost multiplier,
-                  beta    : style cost multiplier,
                   iter    : number of iteration
-        return --- a dictionary
-                  total_cost : array of total cost at eact 10th iteration,
-                  content_cost : array of content cost at each 10th iteration,
-                  style_cost : array of style cost at each 10th iteration,
+        return --- 
                   image : np array of generated image of shape(1,h,w,c)
-        side effect ---
-                  save the generated image in output dir
-
         """
-
-        J_content = cls.calculateTotalContentCost(content,cls.content)
-        J_style = cls.calculateTotalStyleCost(style,cls.style)
+        if(cls.model == None):
+            print('NST is not initialized.')
+            return
+        
+        J_content = cls.calculate_total_content_cost(content)
+        J_style = cls.calculate_total_style_cost(style)
 
         #compute Total Cost
-        J = alpha * J_content + beta * J_style
+        J = cls.alpha * J_content + cls.beta * J_style
 
         #Initialize noisy Generated Image
         image = generate_noise_image(content)
@@ -197,7 +222,7 @@ class NST(ABC):
 
         #initialize plot
         if(display):
-            fig,ax1,ax2 = cls._createFig()
+            cls.create_fig(no_iter)
         J_show = []
         J_C_show = []
         J_S_show = []
@@ -206,56 +231,31 @@ class NST(ABC):
         with tf.Session() as sess:
             #initialize Variables
             sess.run(tf.global_variables_initializer())
-            sess.run(model['input'].assign(image))
+            sess.run(cls.model['input'].assign(image))
 
             #run optimization
             for i in range(no_iter):
                 sess.run(train_step)
-                generated_image = sess.run(model['input'])
+                generated_image = sess.run(cls.model['input'])
 
                 #print infomation
                 if i%10 == 0:
-                    temp_1,temp_2,temp_3 = sess.run([J,J_content,J_style])
-                    J_show.append(temp_1)
-                    J_C_show.append(temp_2)
-                    J_S_show.append(temp_3)
-                    print('iter : {}, J : {}'.format(i,temp_1))
+                    j, j_c, j_s = sess.run([J,J_content,J_style])
+                    J_show.append(j)
+                    J_C_show.append(j_c)
+                    J_S_show.append(j_s)
+                    print(f'iter : {i}, J : {j}, J_C: {j_c}, J_S: {j_s}')
                     if(display):
-                        cls._updateFig(fig,ax1,ax2,generated_image,(J_show,J_C_show,J_S_show),no_iter)
+                        cls.update_fig(
+                            generated_image,
+                            {
+                                "J_show": J_show,
+                                "J_C_show": J_C_show,
+                                "J_S_show": J_S_show
+                            }
+                        )
 
-        mat = {
-            'total_cost' : J_show,
-            'content_cost' : J_C_show,
-            'style_cost' : J_S_show,
-            'image' : generated_image 
-        }
-
-        save_image(CONFIG.OUTPUT_DIR + cls.name + '.jpg',generated_image)
-        scipy.io.savemat(CONFIG.OUTPUT_DIR + cls.name + '.mat',mat)
-        return mat
-
-import PIL
-from PIL import Image
+        return generated_image
 
 
-def resize_image_keep_ratio(width,imagePath,savePath):
-    mywidth = width
-
-    img = Image.open(imagePath)
-    wpercent = (mywidth/float(img.size[0]))
-    hsize = int((float(img.size[1])*float(wpercent)))
-    img = img.resize((mywidth,hsize), PIL.Image.ANTIALIAS)
-    print('Image size : {}'.format(img.size))
-    img.save(savePath)
-
-def resize_image_forced(imagePath,savePath,*targetImg,size=None):
-    resize_size = None
-    if(size==None):
-        resize_size = Image.open(targetImg).size
-    else:
-        resize_size = size
-    img = Image.open(imagePath)
-    img = img.resize(resize_size, PIL.Image.ANTIALIAS)
-    print('Image size : {}'.format(img.size))
-    img.save(savePath)
 
