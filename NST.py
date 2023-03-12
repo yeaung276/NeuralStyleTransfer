@@ -4,6 +4,7 @@ from typing import Tuple, List
 from PIL import Image
 from model import load_vgg_model
 from nst_utils import generate_noise_image
+from preprocessor import Preprocessor
 
 tf.disable_eager_execution()
 class NST:
@@ -168,7 +169,7 @@ class NST:
         
 
     # reporting graphs and training data methods
-    @staticmethod
+    @classmethod
     def create_fig(cls, x_limit: int) -> None:
         cls.fig = plt.gcf()
         cls.fig.show()
@@ -177,20 +178,19 @@ class NST:
         cls.ax2 = cls.fig.add_subplot(1,2,2)
         cls.ax2.set_xlim(int(x_limit/10)+1)
 
-    @staticmethod
+    @classmethod
     def update_fig(cls,generated_image,costs) -> None:
         if(cls.fig == None):
             print('Figure is not initialized.')
             return
         #draw image
-        cls.ax1.imshow(generated_image[0,:,:,:])
+        cls.ax1.imshow(Preprocessor.post_process(generated_image))
         #draw cost
         cls.ax2.plot(costs.get('J_show',[]),'r')
-        cls.ax2.set_ylabel('total cost')
-        ax2_twin = cls.ax2.twinx()
-        ax2_twin.plot(costs.get('J_C_show',[]),'g')
-        ax2_twin.plot(costs.get('J_S_show',[]), 'y')
-        ax2_twin.set_ylabel('content and style cost',color='r')
+        cls.ax2.plot(costs.get('J_C_show',[]),'g')
+        cls.ax2.plot(costs.get('J_S_show',[]), 'y')
+        cls.ax2.set_ylabel('cost')
+        cls.ax2.set_xlabel('iteration')
         cls.fig.canvas.draw()
 
     @classmethod

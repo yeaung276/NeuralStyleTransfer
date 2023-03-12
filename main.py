@@ -6,12 +6,13 @@
 from preprocessor import Preprocessor
 from NST import NST
 
-# content_image = Preprocessor.transform('images/louvre_small.jpg')
+content_image = Preprocessor.transform('images/louvre_small.jpg')
 
-# style_image = Preprocessor.transform('images/monet.jpg')
+style_image = Preprocessor.transform('images/monet.jpg')
 
 NST.initialize('imagenet-vgg-verydeep-19.mat')
 
-# g_img = NST.generate(content_image,style_image,no_iter=200)
+g_img = NST.generate(content_image,style_image,no_iter=200)
 
-# processed_img = Preprocessor.post_process(g_img)
+processed_img = Preprocessor.post_process(g_img)
+processed_img.save('output.png')
