@@ -17,7 +17,7 @@ NST.initialize('imagenet-vgg-verydeep-19.mat')
 
 NST.set_cost_weights(alpha=0.2, beta=0.8)
 
-g_img, _ = NST.generate(content_image,style_image,no_iter=100, display=True)
+g_img, _ = NST.generate(content_image,style_image,no_iter=200, display=True)
 
 processed_img = Preprocessor.post_process(g_img)
 processed_img.save('output.png')

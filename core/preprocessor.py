@@ -40,8 +40,11 @@ class Preprocessor:
         return img
 
     @classmethod
-    def transform(cls, img_path: str) -> np.ndarray:
-        img = Image.open(img_path)
+    def transform(cls, img_input: str | Image.Image) -> np.ndarray:
+        if isinstance(img_input, str):
+            img = Image.open(img_input)
+        else:
+            img = img_input
         img = cls.resize_image(img)
         img = cls.central_crop_image(img)
         img = cls.normalize_image(img)

@@ -1,4 +1,5 @@
 import tensorflow.compat.v1 as tf
+import logging
 import matplotlib.pyplot as plt
 from typing import Tuple, List
 from PIL import Image
@@ -185,7 +186,7 @@ class NST:
     @classmethod
     def update_fig(cls, generated_image, costs) -> None:
         if (cls.fig == None):
-            print('Figure is not initialized.')
+            logging.info('Figure is not initialized.')
             return
         # draw image
         cls.ax1.imshow(Preprocessor.post_process(generated_image))
@@ -213,7 +214,7 @@ class NST:
                   image : np array of generated image of shape(1,h,w,c)
         """
         if (cls.model == None):
-            print('NST is not initialized.')
+            logging.info('NST is not initialized.')
             return
 
         J_content = cls.calculate_total_content_cost(content)
@@ -252,9 +253,9 @@ class NST:
                 J_C_show.append(j_c)
                 J_S_show.append(j_s)
 
-                # print infomation
+                # log infomation
                 if i % 10 == 0:
-                    print(
+                    logging.info(
                         f"iter : {i+1}, J : {'%.2f' % j}, J_C: {'%.2f' % j_c}, J_S: {'%.2f' % j_s}")
 
             cost_matrix = {
