@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+table {
+  font-family: arial, sans-serif;
+  border-collapse: collapse;
+  width: 100%;
+}
+
+td, th {
+  border: 1px solid #dddddd;
+  text-align: left;
+  padding: 8px;
+}
+
+tr:nth-child(even) {
+  background-color: #dddddd;
+}
+li{
+    padding: .5rem
+}
+</style>
+</head>
+<body>
+
+<h2>Neural style transfer - Model inference demo</h2>
+<p>Use NST for core generactive functionality <br>
+     multiprocessing, event loops for running the process in the background <br>
+     raddis for saving data in the memeory, and <br>websocket for notification<br>
+     docker for containerization
+</p>
+<p>Go here for open api documentation: <a id="doc-link">link</a></p>
+<br />
+<div style="display:flex;width:100%">
+    <form style="width:50%">
+        <p>Upload files</p>
+        <label>Content Image</label>
+        <input type="file" name="content_image" id="content-image" />
+        <br />
+        <label>Style Image</label>
+        <input type="file" name="style_image" id="style-image" />
+        <br />
+        <button type="submit" id="submit-button">Submit</button>
+    </form>
+    <div style="height:10rem;width:50%">
+        Real time messages
+        <ul id="messages" style="overflow-y:scroll;height:100%">
+            
+        </ul>
+    </div>
+</div>
+<br />
+<br />
+<button id="refresh-button">Refresh</button>
+<table id="table">
+  <thead>
+    <th>Process Id</th>
+    <th>Content Image</th>
+    <th>Style Image</th>
+    <th>Status</th>
+    <th>Result</th>
+  </thead>
+</table>
+<br />
+<br />
+
+<img width="400" alt="image" id="image" />
+
+</body>
+<script>
+    const ws = new WebSocket(`ws://${window.location.host}/ws`)
+    const styleImg = document.getElementById('style-image');
+    const contentImg = document.getElementById('content-image');
+    const submitBtn = document.getElementById('submit-button');
+    const refreshBtn = document.getElementById('refresh-button')
+    const table = document.getElementById('table');
+    const image = document.getElementById('image')
+    const messages = document.getElementById('messages')
+
+    function createLinkNode(text, onclickfn){
+        const span = document.createElement('span')
+        span.style = 'text-decoration: underline;color: blue;cursor:pointer;'
+        span.innerHTML = text
+        span.onclick = onclickfn
+        return span
+    }
+
+    function createMessageNode(processId, message){
+        const header = document.createElement('div')
+        header.innerHTML = `${processId} (${new Date().toLocaleString()})`
+        const body = document.createElement('div')
+        body.innerHTML = message
+        const messageLi = document.createElement('li')
+        messageLi.appendChild(header)
+        messageLi.appendChild(body)
+        return messageLi
+    }
+
+    function resetTable(){
+        var rowCount = table.rows.length;
+        for (var i = 1; i < rowCount; i++) {
+            table.deleteRow(1);
+        }
+    }
+
+    async function fetchProcesses(){
+        const result = await fetch(`${window.location.origin}/get_jobs`).then((res) => res.json())
+        resetTable()
+        result.forEach((data) => {
+            const row = table.insertRow(1)
+            const cell1 = row.insertCell(0).appendChild(document.createTextNode(data.process_id))
+            const cell2 = row.insertCell(1).appendChild(createLinkNode('content image', () => loadImage(data.process_id, 'content')))
+            const cell3 = row.insertCell(2).appendChild(createLinkNode('style image', () => loadImage(data.process_id, 'style')))
+            const cell4 = row.insertCell(3).appendChild(document.createTextNode(data.status))
+            const cell5 = row.insertCell(4).appendChild(createLinkNode('result', () => loadImage(data.process_id, 'result')))
+        })
+    }
+
+    function submit(e){
+        e.preventDefault()
+        const style = styleImg.files[0]
+        const content = contentImg.files[0]
+        const body = new FormData
+        body.append("content_image", content)
+        body.append("", "\\")
+        body.append("style_image", style)
+
+        fetch(`${window.location.origin}/get_nst_image`, {
+            body,
+            method: "POST"
+        }).then((res) => res.json()).then((data) => {
+            const row = table.insertRow(1)
+            const cell1 = row.insertCell(0).appendChild(document.createTextNode(data.process_id))
+            const cell2 = row.insertCell(1).appendChild(createLinkNode('content image', () => loadImage(data.process_id, 'content')))
+            const cell3 = row.insertCell(2).appendChild(createLinkNode('style image', () => loadImage(data.process_id, 'style')))
+            const cell4 = row.insertCell(3).appendChild(document.createTextNode(data.status))
+            const cell5 = row.insertCell(4).appendChild(createLinkNode('result', () => loadImage(data.process_id, 'result')))
+        })
+    }
+
+    async function loadImage(process_id, image_type){
+        image.src = `${window.location.origin}/get_image/$${image_type}/${process_id}`
+    }
+
+    submitBtn.addEventListener('click', submit)
+    refreshBtn.addEventListener('click', fetchProcesses)
+    ws.onmessage = function(event){
+        const data = JSON.parse(event.data)
+        messages.appendChild(createMessageNode(data.process_id, data.message))
+        if(data.status==='success'){
+            fetchProcesses()
+        }
+        
+    }
+    document.getElementById('doc-link').href = `${document.location.origin}/docs`
+
+    fetchProcesses()
+</script>
+</html>

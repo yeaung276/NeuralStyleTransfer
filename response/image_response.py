@@ -5,11 +5,9 @@ from fastapi.responses import Response
 
 
 class ImageResponse(Response):
-    def __init__(self, image: Image) -> None:
-        buffer = BytesIO()
-        image.save(buffer, format="png")
+    def __init__(self, data: bytes) -> None:
         super().__init__(
             status_code=status.HTTP_200_OK,
-            content=buffer.getvalue(),
+            content=data,
             media_type="image/png",
         )

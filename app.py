@@ -1,22 +1,21 @@
-from typing import Annotated
+import uvicorn
+from typing import Annotated, List, Literal
 from contextlib import asynccontextmanager
 from concurrent.futures.process import ProcessPoolExecutor
-# from io import BytesIO
-import uvicorn
-from fastapi import FastAPI, UploadFile
+from fastapi import FastAPI, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi import File, Request, BackgroundTasks
-# from response.image_response import ImageResponse
-# from PIL import Image
-# from core.NST import NST
-# from core.preprocessor import Preprocessor
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import RedirectResponse
 from background.background_task import generate_image, NSTRequest
 from background.nst_handler import setup_nst
-from db.jobs import Jobs, Job
+from response.job_response import JobResponse
+from response.image_response import ImageResponse
+from ws.connection_manager import ConnectionManager
+from db.jobs import Jobs
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    setup_nst()
     app.state.executor = ProcessPoolExecutor()
     app.state.executor.submit(setup_nst)
     yield
@@ -24,21 +23,13 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
-# content_image = Preprocessor.transform('images/louvre_small.jpg')
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
-# style_image = Preprocessor.transform('images/monet.jpg')
-
-# NST.initialize('imagenet-vgg-verydeep-19.mat')
-
-# NST.set_cost_weights(alpha=0.2, beta=0.8)
-
-# g_img, _ = NST.generate(content_image,style_image,no_iter=200, display=True)
-
-# processed_img = Preprocessor.post_process(g_img)
+manager = ConnectionManager()
 
 @app.get('/')
 def welcome():
-    return "go to {url}/docs for documentation"
+    return RedirectResponse('static/index.html')
 
 @app.post('/get_nst_image')
 async def generate_nst_image(
@@ -46,30 +37,43 @@ async def generate_nst_image(
     content_image: Annotated[UploadFile, File], 
     style_image: Annotated[UploadFile, File],
     background_tasks: BackgroundTasks
-    ):
+    ) -> JobResponse:
     c_image = await content_image.read()
     s_image = await style_image.read()
-    job = Job(process_id='only_job_id', status='processing')
-    Jobs.add(job)
+
+    job = Jobs.create(c_image, s_image)
+
     background_tasks.add_task(
         generate_image, 
         request.app.state.executor, 
+        manager,
         NSTRequest(content=c_image, style=s_image, process_id=job.process_id)
     )
     return job
-    # bytes_image = Image.open(BytesIO(image))
-    # processed = Preprocessor.transform(bytes_image)
-    # process_img = Image.fromarray(processed[0,:,:,:])
-    # return ImageResponse(process_img)
     
-@app.get('/get_job')
-async def get_job():
-    return Jobs.get('only_job_id')
+@app.get('/get_jobs')
+async def get_jobs() -> List[JobResponse]:
+    return Jobs.get_all_jobs()
+
+@app.get('/get_image/${type}/{process_id}')
+async def get_image(type: Literal['result', 'content', 'style'], process_id: str) -> ImageResponse:
+    job = Jobs.get(process_id)
+    if type == 'result':
+        return ImageResponse(job.result)
+    elif type == 'content':
+        return ImageResponse(job.content_file)
+    else:
+        return ImageResponse(job.style_file)
     
-@app.post('/test')
-async def test(request: Request, background_tasks: BackgroundTasks):
-    background_tasks.add_task(generate_image, request.app.state.executor)
-    return 'success'
+@app.websocket('/ws')
+async def websocket(websocket: WebSocket):
+    await manager.connect(websocket)
+    try:
+        while True:
+            data = await websocket.receive_text()
+    except WebSocketDisconnect:
+        manager.disconnect(websocket)
+    
 
 if __name__ == '__main__':
     uvicorn.run("app:app", host='0.0.0.0', port=8000, reload=True)

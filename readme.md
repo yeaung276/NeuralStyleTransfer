@@ -4,7 +4,7 @@ This is Neural Style Transfer implementation using vgg-net-deep-19 conv-net.<br>
 The hypermeters in here are used from Coursera-course(Convolutional Neural Network).<br>
 You can tune the hypermeter further in config dictionary in main.py if u want to create better result. <br>
 When using this script, the content image and style image need to have same hight and width.<br>
-You can resize image using two function used in imagePreprocessing.py script.<br>
+If not image preprocessor will central crop it<br>
 Enjoy :D<br>
 Here are some image I tried.<br>
 ![akh_resize](https://user-images.githubusercontent.com/58524393/89060005-35368580-d388-11ea-9572-a44edcb75cd0.jpg)
