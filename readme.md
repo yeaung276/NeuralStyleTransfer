@@ -2,7 +2,7 @@
 
 ### Introduction
 
-This is Neural Style Transfer implementation using vgg-net-deep-19 conv-net. The hypermeters in here are used from Coursera-coursed(Convolutional Neural Network). You can expreiment with different parameter in [this colab notebook](https://colab.research.google.com/github/yeaung276/NeuralStyleTransfer/blob/master/NeuralStyleTransfer.ipynb).
+This is Neural Style Transfer implementation using vgg-net-deep-19 conv-net and Gram metrix. The hypermeters in here are used from Coursera-coursed(Convolutional Neural Network). You can expreiment with different parameter in [this colab notebook](https://colab.research.google.com/github/yeaung276/NeuralStyleTransfer/blob/master/NeuralStyleTransfer.ipynb).
 
 ### How to run the project
 
