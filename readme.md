@@ -11,7 +11,7 @@ You need to have docker installed in your machine. Run
 to start the service and go to
 `localhost:8000` to interact with the app. For manual running `core.NST`, `main.py` file is provided. You will need to download VGG weight metrix from [here](https://www.vlfeat.org/matconvnet/models/imagenet-vgg-verydeep-19.mat).
 <br>
-usefullinks:
+useful links:
 - `localhost:8000` for interacting with app
 - `localhost:8001` for interacting with redis 
 - `localhost:8000/docs` for interactive api documentation
