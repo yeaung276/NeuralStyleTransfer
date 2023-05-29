@@ -3,7 +3,7 @@ from core.NST import NST
 from core.preprocessor import Preprocessor
 
 ##### hyperparameters #####
-no_iter = 10
+no_iter = 50
 alpha = 0.2
 beta = 0.8
 

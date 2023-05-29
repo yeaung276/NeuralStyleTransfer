@@ -4,7 +4,7 @@ from io import BytesIO
 from PIL import Image
 from pydantic import BaseModel
 from concurrent.futures.process import ProcessPoolExecutor
-from db.jobs import Jobs, Job
+from redis_db.jobs import Jobs, Job
 from background.nst_handler import nst_handler
 from ws.connection_manager import ConnectionManager
 

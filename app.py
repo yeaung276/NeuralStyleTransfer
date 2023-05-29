@@ -11,7 +11,7 @@ from background.nst_handler import setup_nst
 from response.job_response import JobResponse
 from response.image_response import ImageResponse
 from ws.connection_manager import ConnectionManager
-from db.jobs import Jobs
+from redis_db.jobs import Jobs
 
 
 @asynccontextmanager
