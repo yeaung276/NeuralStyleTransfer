@@ -1,7 +1,8 @@
+import os
 from typing import Optional
 from redis_om import get_redis_connection, HashModel, Field
 
-redis_db = get_redis_connection(host="localhost", port="6379")
+REDIS_DATA_URL = os.environ.get('REDIS_OM_URL')
 
 class JobRedis(HashModel):
     process_id: str = Field(index=True, primary_key=True)
@@ -11,4 +12,4 @@ class JobRedis(HashModel):
     result: Optional[str] = Field(default='')
     
     class Meta:
-        database: redis_db
+        database: get_redis_connection(url=REDIS_DATA_URL, decode_responses=True)
